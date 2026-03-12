@@ -40,6 +40,67 @@ def generate_secure_password():
                 any(c in string.punctuation for c in password)):
             return password
 
+def generate_password_interactive():
+    """
+    Interactively generates a password based on user preferences.
+    
+    The user can choose between automatic generation or customizing
+    the password parameters (length, character types).
+    
+    Returns:
+        str: The generated password.
+    """
+    while True:
+        print("\n--- Password Generator ---")
+        choice = input("Generate password automatically or customize it? (auto/custom): ").lower()
+        
+        if choice in ['auto', 'a']:
+            return generate_secure_password()
+        
+        elif choice in ['custom', 'c']:
+            # Get password length
+            while True:
+                try:
+                    length = int(input("Enter desired password length (minimum 8): "))
+                    if length < 8:
+                        print("Length must be at least 8. Please try again.")
+                        continue
+                    break
+                except ValueError:
+                    print("Please enter a valid number.")
+            
+            # Get character type preferences
+            use_digits = input("Include numbers? (yes/no): ").lower() in ['yes', 'y']
+            use_uppercase = input("Include uppercase letters? (yes/no): ").lower() in ['yes', 'y']
+            use_lowercase = input("Include lowercase letters? (yes/no): ").lower() in ['yes', 'y']
+            use_special = input("Include special characters? (yes/no): ").lower() in ['yes', 'y']
+            
+            # Ensure at least one character type is selected
+            if not any([use_digits, use_uppercase, use_lowercase, use_special]):
+                print("You must select at least one character type. Please try again.")
+                continue
+            
+            # Build character set
+            charset = ""
+            if use_lowercase:
+                charset += string.ascii_lowercase
+            if use_uppercase:
+                charset += string.ascii_uppercase
+            if use_digits:
+                charset += string.digits
+            if use_special:
+                charset += string.punctuation
+            
+            # Generate password
+            password = ''.join(secrets.choice(charset) for _ in range(length))
+            return password
+        
+        elif choice in ['exit', 'e']:
+            return None
+        
+        else:
+            print("Invalid choice. Please enter 'auto', 'custom', or 'exit'.")
+
 def get_common_passwords():
     """
     Fetches a list of common passwords from a predefined list of URLs.
@@ -142,20 +203,32 @@ def main():
             print("\n--- 💀 WARNING: This is a very common password! 💀 ---")
             print("Your password is on a list of commonly used passwords and is not secure.")
             
-            # Immediately suggest a secure alternative.
-            new_password = generate_secure_password()
-            print(f"\nWe suggest using a stronger, randomly generated password like: {new_password}")
-            
-            # Ask the user if they want to accept the suggestion.
+            # Offer to generate a new password
             while True:
-                choice = input("Would you like to accept this password? (yes/no): ").lower()
-                if choice in ['yes', 'y']:
-                    print(f"\nYour new secure password is: {new_password}")
-                    return # Exit the application entirely.
-                elif choice in ['no', 'n']:
-                    print("Please try entering a different password.")
-                    break # Break from this inner loop to let the user try again.
-            continue # Continue to the next iteration of the main loop.
+                new_password = generate_password_interactive()
+                if new_password is None:
+                    print("Returning to main menu.")
+                    break
+                
+                # Check the generated password
+                weaknesses = check_password_weaknesses(new_password)
+                if not weaknesses:
+                    print(f"\n✅ Generated password is strong: {new_password}")
+                else:
+                    print(f"\n⚠️ Generated password has weaknesses: {new_password}")
+                    for weakness in weaknesses:
+                        print(f"- {weakness}")
+                
+                # Ask if they want to keep it
+                while True:
+                    choice = input("Keep this password or generate a new one? (keep/new): ").lower()
+                    if choice in ['keep', 'k']:
+                        print(f"\nYour new password is: {new_password}")
+                        return
+                    elif choice in ['new', 'n']:
+                        break
+                    else:
+                        print("Invalid choice. Please enter 'keep' or 'new'.")
 
         # Step 4: If not a common password, check for other structural weaknesses.
         weaknesses = check_password_weaknesses(password)
@@ -175,16 +248,41 @@ def main():
             # If the user has failed twice, offer more direct help.
             if attempt_count >= 2:
                 print("\nYou've tried a couple of times. Still not a strong password.")
-                new_password = generate_secure_password()
-                print(f"\nWe suggest using a stronger, randomly generated password like: {new_password}")
+                
+                # Offer to generate a new password
                 while True:
-                    choice = input("Would you like to accept this password, or try again yourself? (accept/try): ").lower()
-                    if choice in ['accept', 'a']:
-                        print(f"\nYour new secure password is: {new_password}")
-                        return # Exit the application.
-                    elif choice in ['try', 't']:
-                        attempt_count = 0 # Reset the counter if they want to try again.
-                        break # Break inner loop to let them try again.
+                    new_password = generate_password_interactive()
+                    if new_password is None:
+                        print("Returning to main menu.")
+                        break
+                    
+                    # Check the generated password
+                    weaknesses = check_password_weaknesses(new_password)
+                    if not weaknesses:
+                        print(f"\n✅ Generated password is strong: {new_password}")
+                    else:
+                        print(f"\n⚠️ Generated password has weaknesses: {new_password}")
+                        for weakness in weaknesses:
+                            print(f"- {weakness}")
+                    
+                    # Ask if they want to keep it
+                    while True:
+                        choice = input("Keep this password or generate a new one? (keep/try): ").lower()
+                        if choice in ['keep', 'k']:
+                            print(f"\nYour new password is: {new_password}")
+                            return
+                        elif choice in ['try', 't']:
+                            break
+                        else:
+                            print("Invalid choice. Please enter 'keep' or 'try'.")
+                
+                # Option to try entering password again yourself
+                try_again = input("\nWould you like to try entering a password yourself again? (yes/no): ").lower()
+                if try_again not in ['yes', 'y']:
+                    return
+                else:
+                    attempt_count = 0  # Reset the counter
+                    continue
             else: 
                 # This is the first failed attempt.
                 print("\nPlease try another password.")
