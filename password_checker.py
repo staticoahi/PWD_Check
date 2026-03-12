@@ -54,7 +54,8 @@ def get_common_passwords():
     # A list of reliable sources for common password lists
     password_list_urls = [
         "https://gist.githubusercontent.com/cihanmehmet/68abd1a11b3477ebd30eea7ef23183b5/raw/c06ff4cb95e3cc6679d3cd74f24617f498158f9e/password-wordlist.txt",
-        "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10k-most-common.txt"
+        "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10k-most-common.txt",
+        "https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt"
     ]
     
     print("Attempting to fetch a common password list from known sources...")
