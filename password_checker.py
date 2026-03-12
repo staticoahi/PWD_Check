@@ -58,26 +58,22 @@ def get_common_passwords():
         "https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt"
     ]
     
-    print("Attempting to fetch a common password list from known sources...")
     # Iterate through the URLs and try to download the list
     for url in password_list_urls:
-        print(f"Trying: {url}")
         try:
             # Try to open the URL with a 5-second timeout
             with urllib.request.urlopen(url, timeout=5) as response:
                 # Read the list, decode, strip whitespace, and convert to a lowercase set for fast lookups
                 common_passwords = set(line.decode('utf-8').strip().lower() for line in response)
-                print("...Success! A common password list has been loaded.")
                 return common_passwords
-        except urllib.error.URLError as e:
+        except urllib.error.URLError:
             # Handle network-related errors
-            print(f"...Failed: {e.reason}")
-        except Exception as e:
+            pass
+        except Exception:
             # Handle other potential errors (e.g., timeouts, decoding errors)
-            print(f"...Failed with an unexpected error: {e}")
+            pass
 
-    # This message is shown if the loop completes without returning (i.e., all URLs failed)
-    print("\nCould not fetch any common password lists. Proceeding without this check.")
+    # Return empty set if all URLs failed
     return set()
 
 def check_password_weaknesses(password):
