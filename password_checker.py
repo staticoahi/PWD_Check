@@ -246,7 +246,7 @@ def main():
                 print(f"- {weakness}")
 
             # If the user has failed twice, offer more direct help.
-            if attempt_count >= 2:
+            if attempt_count >= 3:
                 print("\nYou've tried a couple of times. Still not a strong password.")
                 
                 # Offer to generate a new password
