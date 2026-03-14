@@ -85,7 +85,9 @@ def get_common_passwords():
     password_list_urls = [
         "https://gist.githubusercontent.com/cihanmehmet/68abd1a11b3477ebd30eea7ef23183b5/raw/c06ff4cb95e3cc6679d3cd74f24617f498158f9e/password-wordlist.txt",
         "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10k-most-common.txt",
-        "https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt"
+        "https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt",
+        "https://github.com/josuamarcelc/common-password-list/blob/main/rockyou.txt/rockyou_1.txt",
+        "https://github.com/josuamarcelc/common-password-list/blob/main/rockyou.txt/rockyou_2.txt"
     ]
     
     for url in password_list_urls:
