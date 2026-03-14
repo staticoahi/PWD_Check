@@ -3,8 +3,9 @@ import urllib.request
 import secrets
 import string
 import os
+import logging
 
-# --- Helper Functions ---
+logging.basicConfig(level=logging.INFO)
 
 def generate_secure_password():
     """
@@ -97,6 +98,7 @@ def get_common_passwords():
                 common_passwords = set(line.decode('utf-8').strip().lower() for line in response)
                 return common_passwords
         except urllib.error.URLError:
+            logging.error(f"Failed to fetch common passwords from {url}")
             pass
     
     return set()
@@ -141,26 +143,31 @@ def main():
                 print("This password is strong!")
         elif choice == '2':
             file_path = input("Enter the path to the CSV file containing passwords: ")
-            with open(file_path, 'r', encoding='utf-8') as file:
-                reader = csv.reader(file)
-                for row in reader:
-                    password = row[0]
-                    weaknesses = check_password_weaknesses(password)
-                    
-                    if weaknesses:
-                        weak_passwords[password] = generate_secure_password()
-                        print(f"The password '{password}' is weak.")
-                        for weakness in weaknesses:
-                            print(f"  - {weakness}")
-                        print(f"Suggested Strong Password: {generate_secure_password()}")
-                    else:
-                        print(f"The password '{password}' is strong!")
-            
-            if weak_passwords:
-                save_suggested_passwords(weak_passwords, file_path)
-                print(f"Summarizing {len(weak_passwords)} weak passwords and their suggested strong passwords in '{os.path.basename(file_path)}_suggested_passwords.txt'.")
-            else:
-                print("No weak passwords found in the CSV file.")
+            try:
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    reader = csv.reader(file)
+                    for row in reader:
+                        password = row[0]
+                        weaknesses = check_password_weaknesses(password)
+                        
+                        if weaknesses:
+                            weak_passwords[password] = generate_secure_password()
+                            print(f"The password '{password}' is weak.")
+                            for weakness in weaknesses:
+                                print(f"  - {weakness}")
+                            print(f"Suggested Strong Password: {generate_secure_password()}")
+                        else:
+                            print(f"The password '{password}' is strong!")
+                
+                if weak_passwords:
+                    save_suggested_passwords(weak_passwords, file_path)
+                    print(f"Summarizing {len(weak_passwords)} weak passwords and their suggested strong passwords in '{os.path.basename(file_path)}_suggested_passwords.txt'.")
+                else:
+                    print("No weak passwords found in the CSV file.")
+            except FileNotFoundError:
+                logging.error(f"File not found: {file_path}")
+            except Exception as e:
+                logging.error(f"An error occurred: {e}")
         elif choice == '3':
             print("Exiting the program.")
             break
