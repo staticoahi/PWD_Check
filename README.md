@@ -6,7 +6,7 @@ This is an interactive command-line tool to help you check the strength of your 
 
 The script checks your password against several security criteria:
 
-- **Common Password Check:** It downloads a list of known common passwords from public sources and warns you if your password is on the list.
+
 - **Minimum Length:** Enforces a minimum length for passwords.
 - **Character Variety:** Checks for the presence of:
   - Uppercase letters (A-Z)

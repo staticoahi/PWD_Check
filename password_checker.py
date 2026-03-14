@@ -2,6 +2,7 @@ import csv
 import urllib.request
 import secrets
 import string
+import os
 
 # --- Helper Functions ---
 
@@ -100,14 +101,19 @@ def get_common_passwords():
     
     return set()
 
-def save_suggested_passwords(weak_passwords):
+def save_suggested_passwords(weak_passwords, file_path):
     """
     Saves the weak passwords and their suggested strong passwords to a text file.
 
     Args:
         weak_passwords (dict): A dictionary where keys are weak passwords and values are suggested strong passwords.
+        file_path (str): The path to the CSV file where the passwords were checked.
     """
-    with open('suggested_passwords.txt', 'w', encoding='utf-8') as file:
+    directory = os.path.dirname(file_path)
+    file_name = 'suggested_passwords.txt'
+    full_path = os.path.join(directory, file_name)
+    
+    with open(full_path, 'w', encoding='utf-8') as file:
         for weak, strong in weak_passwords.items():
             file.write(f"Weak Password: {weak}, Suggested Strong Password: {strong}\n")
 
@@ -151,8 +157,8 @@ def main():
                         print(f"The password '{password}' is strong!")
             
             if weak_passwords:
-                save_suggested_passwords(weak_passwords)
-                print(f"Summarizing {len(weak_passwords)} weak passwords and their suggested strong passwords in 'suggested_passwords.txt'.")
+                save_suggested_passwords(weak_passwords, file_path)
+                print(f"Summarizing {len(weak_passwords)} weak passwords and their suggested strong passwords in '{os.path.basename(file_path)}_suggested_passwords.txt'.")
             else:
                 print("No weak passwords found in the CSV file.")
         elif choice == '3':
