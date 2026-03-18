@@ -1,9 +1,11 @@
 import csv
+from os.path import exists, getmtime
 import urllib.request
 import secrets
 import string
 import os
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO)
 
@@ -100,6 +102,15 @@ def get_common_passwords():
         set: A set of common passwords in lowercase. Returns an empty set if
              no list could be fetched.
     """
+
+    cache_file = "common_passwords_cache.txt"
+    if (
+        os.path.exists(cache_file)
+        and (time.time() - os.path.getmtime(cache_file)) < 604800
+    ):
+        with open(cache_file, "r", encoding="utf-8") as f:
+            return set(line.strip() for line in f)
+
     password_list_urls = [
         "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Common-Credentials/100k-most-used-passwords-NCSC.txt"
     ]
