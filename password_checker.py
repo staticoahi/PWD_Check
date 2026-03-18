@@ -27,7 +27,7 @@ def generate_secure_password():
                 any(c in string.punctuation for c in password)):
             return password
 
-def check_password_weaknesses(password):
+def check_password_weaknesses(password, common_passwords):
     """
     Checks a password against a set of rules and returns a list of weaknesses.
 
@@ -56,6 +56,9 @@ def check_password_weaknesses(password):
     if not any(c in string.punctuation for c in password):
         weaknesses.append("Does not contain any special characters.")
     
+    if password.lower() in common_passwords:
+        weaknesses.append("This Password is known in A Password Leak")
+
     for i in range(len(password) - 2):
         if password[i:i+3].isalpha() and ord(password[i].lower()) + 1 == ord(password[i+1].lower()) and ord(password[i+1].lower()) + 1 == ord(password[i+2].lower()):
             weaknesses.append("Contains sequential characters (like 'abc').")
@@ -85,17 +88,13 @@ def get_common_passwords():
              no list could be fetched.
     """
     password_list_urls = [
-        "https://gist.githubusercontent.com/cihanmehmet/68abd1a11b3477ebd30eea7ef23183b5/raw/c06ff4cb95e3cc6679d3cd74f24617f498158f9e/password-wordlist.txt",
-        "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10k-most-common.txt",
-        "https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt",
-        "https://github.com/josuamarcelc/common-password-list/blob/main/rockyou.txt/rockyou_1.txt",
-        "https://github.com/josuamarcelc/common-password-list/blob/main/rockyou.txt/rockyou_2.txt"
-    ]
+        "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Common-Credentials/100k-most-used-passwords-NCSC.txt"
+        ]
     
     for url in password_list_urls:
         try:
             with urllib.request.urlopen(url, timeout=5) as response:
-                common_passwords = set(line.decode('utf-8').strip().lower() for line in response)
+                common_passwords = set(line.decode('utf-8', errors='ignore').strip().lower() for line in response)
                 return common_passwords
         except urllib.error.URLError:
             logging.error(f"Failed to fetch common passwords from {url}")
@@ -132,7 +131,7 @@ def main():
 
         if choice == '1':
             password = input("Enter the password to check: ")
-            weaknesses = check_password_weaknesses(password)
+            weaknesses = check_password_weaknesses(password, common_passwords)
             
             if weaknesses:
                 print("This password is weak.")
@@ -148,20 +147,15 @@ def main():
                     reader = csv.reader(file)
                     for row in reader:
                         password = row[0]
-                        weaknesses = check_password_weaknesses(password)
+                        weaknesses = check_password_weaknesses(password, common_passwords)
                         
                         if weaknesses:
                             weak_passwords[password] = generate_secure_password()
-                            print(f"The password '{password}' is weak.")
-                            for weakness in weaknesses:
-                                print(f"  - {weakness}")
-                            print(f"Suggested Strong Password: {generate_secure_password()}")
-                        else:
-                            print(f"The password '{password}' is strong!")
+                            
                 
                 if weak_passwords:
                     save_suggested_passwords(weak_passwords, file_path)
-                    print(f"Summarizing {len(weak_passwords)} weak passwords and their suggested strong passwords in '{os.path.basename(file_path)}_suggested_passwords.txt'.")
+                    print(f"Summarizing {len(weak_passwords)} weak passwords and their suggested strong passwords in 'suggested_passwords.txt'.")
                 else:
                     print("No weak passwords found in the CSV file.")
             except FileNotFoundError:
