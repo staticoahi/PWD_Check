@@ -87,8 +87,13 @@ def check_password_weaknesses(password, common_passwords):
         if password[i] == password[i + 1] == password[i + 2]:
             weaknesses.append("Contains repeating characters (like 'aaa').")
             break
-
-    return weaknesses
+    if len(weaknesses) == 0:
+        score = "High Grade of security"
+    elif len(weaknesses) <= 2:
+        score = "Medium Grade of security"
+    else:
+        score = "Low Grade of security"
+    return weaknesses, score
 
 
 def get_common_passwords():
@@ -162,15 +167,15 @@ def main():
 
         if choice == "1":
             password = input("Enter the password to check: ")
-            weaknesses = check_password_weaknesses(password, common_passwords)
+            weaknesses, score = check_password_weaknesses(password, common_passwords)
 
             if weaknesses:
-                print("This password is weak.")
+                print(f"Password Score: {score}")
                 for weakness in weaknesses:
                     print(f"  - {weakness}")
                 print(f"Suggested Strong Password: {generate_secure_password()}")
             else:
-                print("This password is strong!")
+                print(f"Passwordscore: {score}")
         elif choice == "2":
             file_path = input("Enter the path to the CSV file containing passwords: ")
             try:
@@ -178,7 +183,7 @@ def main():
                     reader = csv.reader(file)
                     for row in reader:
                         password = row[0]
-                        weaknesses = check_password_weaknesses(
+                        weaknesses, score = check_password_weaknesses(
                             password, common_passwords
                         )
 
