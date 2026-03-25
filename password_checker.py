@@ -122,11 +122,13 @@ def get_common_passwords():
                     line.decode("utf-8", errors="ignore").strip().lower()
                     for line in response
                 )
+                with open(cache_file, "w", encoding="utf-8") as f:
+                    f.write("\n".join(common_passwords))
                 return common_passwords
         except urllib.error.URLError:
             logging.error(f"Failed to fetch common passwords from {url}")
             pass
-
+         
     return set()
 
 
