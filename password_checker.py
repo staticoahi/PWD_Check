@@ -119,7 +119,8 @@ def get_common_passwords():
     password_list_urls = [
         "https://raw.githubusercontent.com/danielmiessler/SecLists/refs/heads/master/Passwords/Common-Credentials/100k-most-used-passwords-NCSC.txt"
     ]
-
+    print("Fetching common passwords...")
+    common_passwords = set()
     for url in password_list_urls:
         try:
             with urllib.request.urlopen(url, timeout=5) as response:
@@ -129,6 +130,7 @@ def get_common_passwords():
                 )
                 with open(cache_file, "w", encoding="utf-8") as f:
                     f.write("\n".join(common_passwords))
+                print("Password List Downloaded and cached succefully")
                 return common_passwords
         except urllib.error.URLError:
             logging.error(f"Failed to fetch common passwords from {url}")
