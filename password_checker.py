@@ -1,5 +1,6 @@
 import csv
 from os.path import exists, getmtime
+from cryptography.fernet import Fernet
 import urllib.request
 import secrets
 import string
@@ -142,6 +143,16 @@ def get_common_passwords():
 
 
 def save_suggested_passwords(weak_passwords, file_path):
+    if os.path.exists("encryption.key"):
+        with open("encryption.key", "rb") as f:
+            key = f.read()
+        
+    else: 
+        key = Fernet.generate_key()
+        with open("encryption.key", "wb") as f:
+            f.write(key)
+
+    fernet = Fernet(key)
     """
     Saves the weak passwords and their suggested strong passwords to a text file.
 
@@ -153,10 +164,16 @@ def save_suggested_passwords(weak_passwords, file_path):
     file_name = "suggested_passwords.txt"
     full_path = os.path.join(directory, file_name)
 
-    with open(full_path, "w", encoding="utf-8") as file:
-        for weak, strong in weak_passwords.items():
-            file.write(f"Weak Password: {weak}, Suggested Strong Password: {strong}\n")
+    fernet = Fernet(key)
+    content = ""
+    for weak, strong in weak_passwords.items():
+        content += f"Weak Password: {weak}, Suggested Sttrong Password: {strong}\n"
+            #file.write(f"Weak Password: {weak}, Suggested Strong Password: {strong}\n")
+    
+    encrypted = fernet.encrypt(content.encode())
 
+    with open(full_path, "wb") as file:
+        file.write(encrypted)
 
 def main():
     common_passwords = get_common_passwords()

@@ -1,3 +1,2 @@
-# Python artifacts
-__pycache__/
-*.pyc
+encryption.key
+common_passwords_cache.txt
