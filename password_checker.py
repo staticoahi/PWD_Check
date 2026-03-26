@@ -6,6 +6,8 @@ import string
 import os
 import logging
 import time
+from colorama import Fore, Style, init
+init()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -170,11 +172,14 @@ def main():
         if choice == "1":
             password = input("Enter the password to check: ")
             weaknesses, score = check_password_weaknesses(password, common_passwords)
-
+            
+            color = Fore.RED if score == "Low Grade of security" else Fore.YELLOW if score == "Medium Grade of security" else Fore.GREEN
+            print(f"{color}Password Score: {score}{Style.RESET_ALL}")
+            
             if weaknesses:
-                print(f"Password Score: {score}")
+                #print(f"Password Score: {score}")
                 for weakness in weaknesses:
-                    print(f"  - {weakness}")
+                    print(f"{Fore.RED}  - {weakness}{Style.RESET_ALL}")
                 print(f"Suggested Strong Password: {generate_secure_password()}")
             else:
                 print(f"Passwordscore: {score}")
