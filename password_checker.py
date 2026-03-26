@@ -188,14 +188,22 @@ def main():
             try:
                 with open(file_path, "r", encoding="utf-8") as file:
                     reader = csv.reader(file)
+                    total = sum(1 for row in reader)
+                    file.seek(0)
+                    reader = csv.reader(file)
+                    current = 0
                     for row in reader:
+                        current +=1
+                        print(f"Checking Password {current} of {total}...", end="\r", flush=True)
                         password = row[0]
                         weaknesses, score = check_password_weaknesses(
                             password, common_passwords
                         )
+                        
 
                         if weaknesses:
                             weak_passwords[password] = generate_secure_password()
+                    print()
 
                 if weak_passwords:
                     save_suggested_passwords(weak_passwords, file_path)
