@@ -20,16 +20,28 @@ The script checks your password against several security criteria:
 ## Additional Features
 
 - **Batch Processing:** Check multiple passwords from a CSV file.
+- **Encrypted Storage:** Weak passwords are stored securely using Fernet encryption.
+- **Decryption:** You can decrypt and view previously saved passwords.
 - **Exit Option:** Exit the program at any time.
 - **Clear Feedback and Suggestions:** Provide clear feedback on the weaknesses of your password and offer secure suggestions for improvement.
 - **Interactive Prompts:** Use an interactive menu to navigate through options and easily check passwords.
+
+## Menu
+
+1. **Check a single password** - Enter a password manually to check its strength
+2. **Enter the path to a CSV file** - Batch process multiple passwords from a CSV file
+3. **Decrypt saved passwords** - Decrypt and view previously saved passwords from `suggested_passwords.txt`
+4. **Exit** - Exit the program
 
 ## Requirements
 
 - **Python 3.x:** The script is written in Python 3.
 - **Internet Connection:** An internet connection is required on the first run to download the list of common passwords.
+- **External Libraries:** Install the required packages:
 
-No external libraries need to be installed. The script uses only standard Python libraries.
+```bash
+pip install cryptography colorama
+```
 
 ## How to Use
 

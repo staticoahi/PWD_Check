@@ -1,5 +1,5 @@
 import csv
-from os.path import exists, getmtime
+from os.path import getmtime
 from cryptography.fernet import Fernet
 import urllib.request
 import secrets
@@ -143,37 +143,62 @@ def get_common_passwords():
 
 
 def save_suggested_passwords(weak_passwords, file_path):
+    key = None
+    
     if os.path.exists("encryption.key"):
         with open("encryption.key", "rb") as f:
             key = f.read()
         
-    else: 
+    if key is None:
         key = Fernet.generate_key()
         with open("encryption.key", "wb") as f:
             f.write(key)
 
     fernet = Fernet(key)
-    """
-    Saves the weak passwords and their suggested strong passwords to a text file.
 
-    Args:
-        weak_passwords (dict): A dictionary where keys are weak passwords and values are suggested strong passwords.
-        file_path (str): The path to the CSV file where the passwords were checked.
-    """
+    if not weak_passwords:
+        return
+
     directory = os.path.dirname(file_path)
     file_name = "suggested_passwords.txt"
     full_path = os.path.join(directory, file_name)
-
-    fernet = Fernet(key)
     content = ""
     for weak, strong in weak_passwords.items():
-        content += f"Weak Password: {weak}, Suggested Sttrong Password: {strong}\n"
-            #file.write(f"Weak Password: {weak}, Suggested Strong Password: {strong}\n")
+        content += f"Weak Password: {weak}, Suggested Strong Password: {strong}\n"
     
     encrypted = fernet.encrypt(content.encode())
 
     with open(full_path, "wb") as file:
         file.write(encrypted)
+    
+    print(f"\n{Fore.GREEN}Passwords saved and encrypted in '{full_path}'{Style.RESET_ALL}")
+    print(f"Your encryption key (save this to decrypt manually): {key.decode()}")
+    print("You can also decrypt using option 3 in the main menu.")
+
+
+def load_encrypted_passwords(file_path):
+    if not os.path.exists("encryption.key"):
+        print("No encryption key found.")
+        return None
+    
+    with open("encryption.key", "rb") as f:
+        key = f.read()
+    
+    fernet = Fernet(key)
+    
+    if not os.path.exists(file_path):
+        print(f"File not found: {file_path}")
+        return None
+    
+    with open(file_path, "rb") as file:
+        encrypted_content = file.read()
+    
+    try:
+        decrypted = fernet.decrypt(encrypted_content)
+        return decrypted.decode()
+    except Exception as e:
+        print(f"Failed to decrypt: {e}")
+        return None
 
 def main():
     common_passwords = get_common_passwords()
@@ -183,8 +208,9 @@ def main():
         print("\nChoose an option:")
         print("1. Check a single password")
         print("2. Enter the path to a CSV file")
-        print("3. Exit")
-        choice = input("Enter your choice (1, 2, or 3): ")
+        print("3. Decrypt saved passwords")
+        print("4. Exit")
+        choice = input("Enter your choice (1, 2, 3, or 4): ")
 
         if choice == "1":
             password = input("Enter the password to check: ")
@@ -194,12 +220,11 @@ def main():
             print(f"{color}Password Score: {score}{Style.RESET_ALL}")
             
             if weaknesses:
-                #print(f"Password Score: {score}")
                 for weakness in weaknesses:
                     print(f"{Fore.RED}  - {weakness}{Style.RESET_ALL}")
                 print(f"Suggested Strong Password: {generate_secure_password()}")
             else:
-                print(f"Passwordscore: {score}")
+                print(f"{Fore.GREEN}Password Score: {score}{Style.RESET_ALL}")
         elif choice == "2":
             file_path = input("Enter the path to the CSV file containing passwords: ")
             try:
@@ -211,6 +236,8 @@ def main():
                     current = 0
                     for row in reader:
                         current +=1
+                        if not row or not row[0].strip():
+                            continue
                         print(f"Checking Password {current} of {total}...", end="\r", flush=True)
                         password = row[0]
                         weaknesses, score = check_password_weaknesses(
@@ -234,10 +261,34 @@ def main():
             except Exception as e:
                 logging.error(f"An error occurred: {e}")
         elif choice == "3":
+            print("\nDecrypt options:")
+            print("1. Use key from file (encryption.key)")
+            print("2. Enter key manually")
+            decrypt_choice = input("Enter your choice (1 or 2): ")
+            
+            if decrypt_choice == "1":
+                encrypted_file = input("Enter path to encrypted file: ")
+                result = load_encrypted_passwords(encrypted_file)
+                if result:
+                    print(f"\n{result}")
+            elif decrypt_choice == "2":
+                key_input = input("Enter your encryption key: ").strip()
+                encrypted_file = input("Enter path to encrypted file: ")
+                try:
+                    fernet = Fernet(key_input.encode())
+                    with open(encrypted_file, "rb") as f:
+                        encrypted_content = f.read()
+                    decrypted = fernet.decrypt(encrypted_content)
+                    print(f"\n{decrypted.decode()}")
+                except Exception as e:
+                    print(f"{Fore.RED}Failed to decrypt: Invalid key or file{Style.RESET_ALL}")
+            else:
+                print("Invalid choice.")
+        elif choice == "4":
             print("Exiting the program.")
             break
         else:
-            print("Invalid choice. Please enter 1, 2, or 3.")
+            print("Invalid choice. Please enter 1, 2, 3, or 4.")
 
 
 if __name__ == "__main__":
