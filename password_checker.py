@@ -7,26 +7,65 @@ import string
 import os
 import logging
 import time
+import argparse
+import sys
 from colorama import Fore, Style, init
-init()
 
-logging.basicConfig(level=logging.INFO)
+VERSION = "1.0.0"
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog="password_checker",
+        description="Check password strength and generate secure alternatives",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--check", "-c", metavar="PASSWORD", help="Check a single password")
+    parser.add_argument("--file", "-f", metavar="FILE", help="Check passwords from a CSV file")
+    parser.add_argument("--column", "-col", type=int, default=0, metavar="N", help="CSV column index to use (default: 0)")
+    parser.add_argument("--quiet", "-q", action="store_true", help="Suppress non-essential output")
+    parser.add_argument("--no-color", action="store_true", help="Disable colored output")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose debug output")
+    parser.add_argument("--mask", "-m", action="store_true", help="Mask password input")
+    parser.add_argument("--version", action="store_true", help="Show version information")
+    return parser.parse_args()
 
 
-def generate_secure_password():
+def init_colorama(no_color):
+    if no_color:
+        global Fore, Style
+        class Fore:
+            RED = YELLOW = GREEN = ""
+        class Style:
+            RESET_ALL = BRIGHT = ""
+    else:
+        init()
+
+
+def get_password_input(mask=False, prompt="Enter the password to check: "):
+    if mask:
+        import getpass
+        return getpass.getpass(prompt)
+    return input(prompt)
+
+
+def generate_secure_password(length=16):
     """
-    Generates a cryptographically strong 16-character password.
+    Generates a cryptographically strong password.
 
     It uses the `secrets` module for secure random number generation.
     The password is guaranteed to contain at least one lowercase letter,
     one uppercase letter, one digit, and one special character.
 
+    Args:
+        length (int): Password length (default 16)
+
     Returns:
         str: A securely generated password.
     """
     alphabet = string.ascii_letters + string.digits + string.punctuation
+    
     while True:
-        password = "".join(secrets.choice(alphabet) for _ in range(16))
+        password = "".join(secrets.choice(alphabet) for _ in range(length))
         if (
             any(c.islower() for c in password)
             and any(c.isupper() for c in password)
@@ -143,6 +182,9 @@ def get_common_passwords():
 
 
 def save_suggested_passwords(weak_passwords, file_path):
+    if not weak_passwords:
+        return
+    
     key = None
     
     if os.path.exists("encryption.key"):
@@ -156,12 +198,8 @@ def save_suggested_passwords(weak_passwords, file_path):
 
     fernet = Fernet(key)
 
-    if not weak_passwords:
-        return
-
-    directory = os.path.dirname(file_path)
     file_name = "suggested_passwords.txt"
-    full_path = os.path.join(directory, file_name)
+    full_path = os.path.join(os.path.expanduser("~/Documents"), file_name)
     content = ""
     for weak, strong in weak_passwords.items():
         content += f"Weak Password: {weak}, Suggested Strong Password: {strong}\n"
@@ -201,7 +239,78 @@ def load_encrypted_passwords(file_path):
         return None
 
 def main():
+    args = parse_args()
+    
+    init_colorama(args.no_color)
+    
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    elif args.quiet:
+        logging.basicConfig(level=logging.WARNING)
+    else:
+        logging.basicConfig(level=logging.INFO)
+    
+    if args.version:
+        print(f"Password Checker v{VERSION}")
+        return
+    
     common_passwords = get_common_passwords()
+    
+    if args.check:
+        password = args.check
+        weaknesses, score = check_password_weaknesses(password, common_passwords)
+        
+        color = Fore.RED if score == "Low Grade of security" else Fore.YELLOW if score == "Medium Grade of security" else Fore.GREEN
+        print(f"{color}Password Score: {score}{Style.RESET_ALL}")
+        
+        if weaknesses:
+            for weakness in weaknesses:
+                print(f"{Fore.RED}  - {weakness}{Style.RESET_ALL}")
+            print(f"Suggested Strong Password: {generate_secure_password()}")
+        return
+    
+    if args.file:
+        file_path = args.file
+        column = args.column
+        weak_passwords = {}
+        try:
+            with open(file_path, "r", encoding="utf-8") as file:
+                reader = csv.reader(file)
+                total = sum(1 for row in reader)
+                file.seek(0)
+                reader = csv.reader(file)
+                current = 0
+                for row in reader:
+                    current +=1
+                    if len(row) <= column or not row[column].strip():
+                        continue
+                    if not args.quiet:
+                        print(f"Checking Password {current} of {total}...", end="\r", flush=True)
+                    password = row[column]
+                    weaknesses, score = check_password_weaknesses(
+                        password, common_passwords
+                    )
+                    
+                    if weaknesses:
+                        weak_passwords[password] = generate_secure_password()
+                if not args.quiet:
+                    print()
+            
+            if weak_passwords:
+                save_suggested_passwords(weak_passwords, file_path)
+                if not args.quiet:
+                    print(
+                        f"Summarizing {len(weak_passwords)} weak passwords and their suggested strong passwords in 'suggested_passwords.txt'."
+                    )
+            else:
+                if not args.quiet:
+                    print("No weak passwords found in the CSV file.")
+        except FileNotFoundError:
+            logging.error(f"File not found: {file_path}")
+        except Exception as e:
+            logging.error(f"An error occurred: {e}")
+        return
+    
     weak_passwords = {}
 
     while True:
@@ -213,7 +322,7 @@ def main():
         choice = input("Enter your choice (1, 2, 3, or 4): ")
 
         if choice == "1":
-            password = input("Enter the password to check: ")
+            password = get_password_input(args.mask)
             weaknesses, score = check_password_weaknesses(password, common_passwords)
             
             color = Fore.RED if score == "Low Grade of security" else Fore.YELLOW if score == "Medium Grade of security" else Fore.GREEN
@@ -273,6 +382,9 @@ def main():
                     print(f"\n{result}")
             elif decrypt_choice == "2":
                 key_input = input("Enter your encryption key: ").strip()
+                if len(key_input) < 32:
+                    print(f"{Fore.RED}Invalid key format. Key should be 44 characters (base64-encoded){Style.RESET_ALL}")
+                    continue
                 encrypted_file = input("Enter path to encrypted file: ")
                 try:
                     fernet = Fernet(key_input.encode())
