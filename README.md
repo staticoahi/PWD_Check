@@ -22,7 +22,9 @@ The script checks your password against several security criteria:
 - **Batch Processing:** Check multiple passwords from a CSV file.
 - **Encrypted Storage:** Weak passwords are stored securely using Fernet encryption.
 - **Decryption:** You can decrypt and view previously saved passwords.
+- **TUI (Terminal User Interface):** Rich interactive interface with progress bars, tables, and colored output.
 - **CLI Support:** Use command-line arguments for automation.
+- **Cross-Platform:** Works on Windows, Linux, and macOS.
 - **Clear Feedback and Suggestions:** Provide clear feedback on the weaknesses of your password and offer secure suggestions for improvement.
 - **Interactive Prompts:** Use an interactive menu to navigate through options and easily check passwords.
 
@@ -45,7 +47,8 @@ python password_checker.py [OPTIONS]
 | `--file FILE` | `-f` | Check passwords from a CSV file |
 | `--column N` | `-col` | CSV column index to use (default: 0) |
 | `--quiet` | `-q` | Suppress non-essential output |
-| `--no-color` | - | Disable colored output |
+| `--no-color` | - | Disable colored/TUI output |
+| `--no-tui` | - | Disable TUI (use simple text mode) |
 | `--verbose` | `-v` | Enable verbose debug output |
 | `--mask` | `-m` | Mask password input |
 | `--version` | - | Show version information |
@@ -69,14 +72,28 @@ python password_checker.py -f passwords.csv --no-color
 python password_checker.py --version
 ```
 
-## Requirements
+## Installation
 
-- **Python 3.x:** The script is written in Python 3.
-- **Internet Connection:** An internet connection is required on the first run to download the list of common passwords.
-- **External Libraries:** Install the required packages:
+### Quick Start (Automatic Setup)
 
 ```bash
+python setup.py
+```
+
+This will automatically install all required dependencies.
+
+### Manual Installation
+
+If you prefer to install manually, you need these packages:
+
+**Required (must be installed):**
+```bash
 pip install cryptography colorama
+```
+
+**Optional (for TUI):**
+```bash
+pip install rich
 ```
 
 ## How to Use

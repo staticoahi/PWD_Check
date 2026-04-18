@@ -11,7 +11,21 @@ import argparse
 import sys
 from colorama import Fore, Style, init
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
+
+try:
+    from rich.console import Console
+    from rich.table import Table
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+    from rich.prompt import Prompt, Confirm
+    from rich.panel import Panel
+    from rich import box
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
+
+console = Console()
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -24,6 +38,7 @@ def parse_args():
     parser.add_argument("--column", "-col", type=int, default=0, metavar="N", help="CSV column index to use (default: 0)")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress non-essential output")
     parser.add_argument("--no-color", action="store_true", help="Disable colored output")
+    parser.add_argument("--no-tui", action="store_true", help="Disable TUI (use simple text mode)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose debug output")
     parser.add_argument("--mask", "-m", action="store_true", help="Mask password input")
     parser.add_argument("--version", action="store_true", help="Show version information")
@@ -141,13 +156,6 @@ def check_password_weaknesses(password, common_passwords):
 def get_common_passwords():
     """
     Fetches a list of common passwords from a predefined list of URLs.
-
-    It tries URLs in order and uses the first one that works, making the tool
-    more resilient if one source is unavailable.
-
-    Returns:
-        set: A set of common passwords in lowercase. Returns an empty set if
-             no list could be fetched.
     """
 
     cache_file = "common_passwords_cache.txt"
@@ -177,7 +185,7 @@ def get_common_passwords():
         except urllib.error.URLError:
             logging.error(f"Failed to fetch common passwords from {url}")
             pass
-         
+          
     return set()
 
 
@@ -209,9 +217,7 @@ def save_suggested_passwords(weak_passwords, file_path):
     with open(full_path, "wb") as file:
         file.write(encrypted)
     
-    print(f"\n{Fore.GREEN}Passwords saved and encrypted in '{full_path}'{Style.RESET_ALL}")
-    print(f"Your encryption key (save this to decrypt manually): {key.decode()}")
-    print("You can also decrypt using option 3 in the main menu.")
+    return full_path, key.decode()
 
 
 def load_encrypted_passwords(file_path):
@@ -238,10 +244,241 @@ def load_encrypted_passwords(file_path):
         print(f"Failed to decrypt: {e}")
         return None
 
+
+def display_password_result(password, weaknesses, score, use_rich=True):
+    if use_rich and RICH_AVAILABLE:
+        if score == "Low Grade of security":
+            color = "red"
+        elif score == "Medium Grade of security":
+            color = "yellow"
+        else:
+            color = "green"
+        
+        console.print(f"\n[bold]Password:[/bold] {'*' * len(password) if len(password) > 4 else password}")
+        console.print(f"[bold {color}]Score: {score}[/bold {color}]")
+        
+        if weaknesses:
+            console.print("\n[bold red]Weaknesses:[/bold red]")
+            for w in weaknesses:
+                console.print(f"  [red]•[/red] {w}")
+            
+            strong = generate_secure_password()
+            console.print(f"\n[bold green]Suggested Strong Password:[/bold green] [cyan]{strong}[/cyan]")
+    else:
+        color = Fore.RED if score == "Low Grade of security" else Fore.YELLOW if score == "Medium Grade of security" else Fore.GREEN
+        print(f"\nPassword: {'*' * len(password) if len(password) > 4 else password}")
+        print(f"{color}Score: {score}{Style.RESET_ALL}")
+        
+        if weaknesses:
+            print("\nWeaknesses:")
+            for w in weaknesses:
+                print(f"  - {w}")
+            
+            strong = generate_secure_password()
+            print(f"\nSuggested Strong Password: {strong}")
+
+
+def display_batch_results(weak_passwords, full_path, key, use_rich=True):
+    if use_rich and RICH_AVAILABLE:
+        table = Table(title="Weak Passwords Found", box=box.ROUNDED)
+        table.add_column("#", style="cyan", justify="right")
+        table.add_column("Weak Password", style="red")
+        table.add_column("Suggested Strong Password", style="green")
+        
+        for i, (weak, strong) in enumerate(weak_passwords.items(), 1):
+            table.add_row(str(i), weak, strong)
+        
+        console.print(table)
+        console.print(f"\n[bold green]Passwords saved to:[/bold green] {full_path}")
+        console.print(f"[bold yellow]Encryption Key (save this!):[/bold yellow] [cyan]{key}[/cyan]")
+        console.print("\n[dim]You can decrypt using option 3 in the main menu.[/dim]")
+    else:
+        print(f"\nFound {len(weak_passwords)} weak passwords:")
+        for i, (weak, strong) in enumerate(weak_passwords.items(), 1):
+            print(f"  {i}. {weak} -> {strong}")
+        print(f"\nPasswords saved to: {full_path}")
+        print(f"Encryption Key: {key}")
+
+
+def tui_menu(common_passwords, no_tui=False):
+    use_rich = RICH_AVAILABLE and not no_tui
+    
+    while True:
+        if use_rich:
+            console.print(Panel.fit(
+                "[bold cyan]Password Strength Checker[/bold cyan]\n"
+                "[dim]Choose an option below[/dim]",
+                border_style="cyan"
+            ))
+            console.print("[bold]1.[/bold] Check a single password")
+            console.print("[bold]2.[/bold] Enter the path to a CSV file")
+            console.print("[bold]3.[/bold] Decrypt saved passwords")
+            console.print("[bold]4.[/bold] Exit")
+            choice = Prompt.ask("[bold]Enter your choice[/bold]", choices=["1", "2", "3", "4"], default="4")
+        else:
+            print("\nChoose an option:")
+            print("1. Check a single password")
+            print("2. Enter the path to a CSV file")
+            print("3. Decrypt saved passwords")
+            print("4. Exit")
+            choice = input("Enter your choice (1, 2, 3, or 4): ")
+
+        if choice == "1":
+            if use_rich:
+                password = Prompt.ask("[bold]Enter password to check[/bold]", password=True)
+            else:
+                password = get_password_input(mask=True)
+            
+            weaknesses, score = check_password_weaknesses(password, common_passwords)
+            display_password_result(password, weaknesses, score, use_rich)
+            
+        elif choice == "2":
+            if use_rich:
+                file_path = Prompt.ask("[bold]Enter path to CSV file[/bold]")
+            else:
+                file_path = input("Enter the path to the CSV file containing passwords: ")
+            
+            column = 0
+            if use_rich:
+                col_input = Prompt.ask("[bold]Column index (default: 0)[/bold]", default="0")
+                if col_input.isdigit():
+                    column = int(col_input)
+            else:
+                col_input = input("Column index (default: 0): ")
+                if col_input.isdigit():
+                    column = int(col_input)
+            
+            weak_passwords = {}
+            try:
+                with open(file_path, "r", encoding="utf-8") as file:
+                    reader = csv.reader(file)
+                    total = sum(1 for row in reader)
+                    file.seek(0)
+                    reader = csv.reader(file)
+                    current = 0
+                    
+                    if use_rich and RICH_AVAILABLE:
+                        with Progress(
+                            SpinnerColumn(),
+                            TextColumn("[progress.description]{task.description}"),
+                            BarColumn(),
+                            TaskProgressColumn(),
+                            console=console
+                        ) as progress:
+                            task = progress.add_task(f"[cyan]Checking {total} passwords...", total=total)
+                            for row in reader:
+                                current += 1
+                                if len(row) <= column or not row[column].strip():
+                                    progress.update(task, advance=1)
+                                    continue
+                                password = row[column]
+                                weaknesses, score = check_password_weaknesses(password, common_passwords)
+                                if weaknesses:
+                                    weak_passwords[password] = generate_secure_password()
+                                progress.update(task, advance=1)
+                    else:
+                        for row in reader:
+                            current += 1
+                            if len(row) <= column or not row[column].strip():
+                                continue
+                            print(f"Checking Password {current} of {total}...", end="\r", flush=True)
+                            password = row[column]
+                            weaknesses, score = check_password_weaknesses(password, common_passwords)
+                            if weaknesses:
+                                weak_passwords[password] = generate_secure_password()
+                        print()
+                
+                if weak_passwords:
+                    full_path, key = save_suggested_passwords(weak_passwords, file_path)
+                    display_batch_results(weak_passwords, full_path, key, use_rich)
+                else:
+                    if use_rich:
+                        console.print("[green]No weak passwords found in the CSV file.[/green]")
+                    else:
+                        print("No weak passwords found in the CSV file.")
+            except FileNotFoundError:
+                if use_rich:
+                    console.print(f"[red]File not found: {file_path}[/red]")
+                else:
+                    logging.error(f"File not found: {file_path}")
+            except Exception as e:
+                if use_rich:
+                    console.print(f"[red]An error occurred: {e}[/red]")
+                else:
+                    logging.error(f"An error occurred: {e}")
+                    
+        elif choice == "3":
+            if use_rich:
+                console.print("[bold]Decrypt options:[/bold]")
+                console.print("[bold]1.[/bold] Use key from file (encryption.key)")
+                console.print("[bold]2.[/bold] Enter key manually")
+                decrypt_choice = Prompt.ask("[bold]Enter your choice[/bold]", choices=["1", "2"], default="1")
+            else:
+                print("\nDecrypt options:")
+                print("1. Use key from file (encryption.key)")
+                print("2. Enter key manually")
+                decrypt_choice = input("Enter your choice (1 or 2): ")
+            
+            if decrypt_choice == "1":
+                if use_rich:
+                    encrypted_file = Prompt.ask("[bold]Enter path to encrypted file[/bold]", default="~/Documents/suggested_passwords.txt")
+                else:
+                    encrypted_file = input("Enter path to encrypted file: ")
+                
+                result = load_encrypted_passwords(os.path.expanduser(encrypted_file))
+                if result and use_rich:
+                    console.print(Panel(result, title="Decrypted Content", border_style="green"))
+                elif result:
+                    print(f"\n{result}")
+            elif decrypt_choice == "2":
+                if use_rich:
+                    key_input = Prompt.ask("[bold]Enter encryption key[/bold]", password=True)
+                    encrypted_file = Prompt.ask("[bold]Enter path to encrypted file[/bold]", default="~/Documents/suggested_passwords.txt")
+                else:
+                    key_input = input("Enter your encryption key: ").strip()
+                    encrypted_file = input("Enter path to encrypted file: ")
+                
+                if len(key_input) < 32:
+                    if use_rich:
+                        console.print("[red]Invalid key format. Key should be 44 characters (base64-encoded)[/red]")
+                    else:
+                        print("Invalid key format. Key should be 44 characters (base64-encoded)")
+                    continue
+                
+                try:
+                    fernet = Fernet(key_input.encode())
+                    with open(os.path.expanduser(encrypted_file), "rb") as f:
+                        encrypted_content = f.read()
+                    decrypted = fernet.decrypt(encrypted_content)
+                    if use_rich:
+                        console.print(Panel(decrypted.decode(), title="Decrypted Content", border_style="green"))
+                    else:
+                        print(f"\n{decrypted.decode()}")
+                except Exception as e:
+                    if use_rich:
+                        console.print(f"[red]Failed to decrypt: Invalid key or file[/red]")
+                    else:
+                        print("Failed to decrypt: Invalid key or file")
+            else:
+                if use_rich:
+                    console.print("[red]Invalid choice.[/red]")
+                else:
+                    print("Invalid choice.")
+                    
+        elif choice == "4":
+            if use_rich:
+                console.print("[cyan]Exiting the program. Stay secure![/cyan]")
+            else:
+                print("Exiting the program.")
+            break
+
+
 def main():
     args = parse_args()
     
     init_colorama(args.no_color)
+    
+    use_rich = RICH_AVAILABLE and not args.no_tui and not args.no_color
     
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
@@ -259,20 +496,14 @@ def main():
     if args.check:
         password = args.check
         weaknesses, score = check_password_weaknesses(password, common_passwords)
-        
-        color = Fore.RED if score == "Low Grade of security" else Fore.YELLOW if score == "Medium Grade of security" else Fore.GREEN
-        print(f"{color}Password Score: {score}{Style.RESET_ALL}")
-        
-        if weaknesses:
-            for weakness in weaknesses:
-                print(f"{Fore.RED}  - {weakness}{Style.RESET_ALL}")
-            print(f"Suggested Strong Password: {generate_secure_password()}")
+        display_password_result(password, weaknesses, score, use_rich)
         return
     
     if args.file:
         file_path = args.file
         column = args.column
         weak_passwords = {}
+        
         try:
             with open(file_path, "r", encoding="utf-8") as file:
                 reader = csv.reader(file)
@@ -280,127 +511,56 @@ def main():
                 file.seek(0)
                 reader = csv.reader(file)
                 current = 0
-                for row in reader:
-                    current +=1
-                    if len(row) <= column or not row[column].strip():
-                        continue
+                
+                if use_rich and RICH_AVAILABLE:
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[progress.description]{task.description}"),
+                        BarColumn(),
+                        TaskProgressColumn(),
+                        console=console
+                    ) as progress:
+                        task = progress.add_task(f"[cyan]Checking {total} passwords...", total=total)
+                        for row in reader:
+                            current += 1
+                            if len(row) <= column or not row[column].strip():
+                                progress.update(task, advance=1)
+                                continue
+                            password = row[column]
+                            weaknesses, score = check_password_weaknesses(password, common_passwords)
+                            if weaknesses:
+                                weak_passwords[password] = generate_secure_password()
+                            progress.update(task, advance=1)
+                else:
+                    for row in reader:
+                        current += 1
+                        if len(row) <= column or not row[column].strip():
+                            continue
+                        if not args.quiet:
+                            print(f"Checking Password {current} of {total}...", end="\r", flush=True)
+                        password = row[column]
+                        weaknesses, score = check_password_weaknesses(password, common_passwords)
+                        if weaknesses:
+                            weak_passwords[password] = generate_secure_password()
                     if not args.quiet:
-                        print(f"Checking Password {current} of {total}...", end="\r", flush=True)
-                    password = row[column]
-                    weaknesses, score = check_password_weaknesses(
-                        password, common_passwords
-                    )
-                    
-                    if weaknesses:
-                        weak_passwords[password] = generate_secure_password()
-                if not args.quiet:
-                    print()
+                        print()
             
             if weak_passwords:
-                save_suggested_passwords(weak_passwords, file_path)
-                if not args.quiet:
-                    print(
-                        f"Summarizing {len(weak_passwords)} weak passwords and their suggested strong passwords in 'suggested_passwords.txt'."
-                    )
+                full_path, key = save_suggested_passwords(weak_passwords, file_path)
+                display_batch_results(weak_passwords, full_path, key, use_rich)
             else:
                 if not args.quiet:
-                    print("No weak passwords found in the CSV file.")
+                    if use_rich:
+                        console.print("[green]No weak passwords found in the CSV file.[/green]")
+                    else:
+                        print("No weak passwords found in the CSV file.")
         except FileNotFoundError:
             logging.error(f"File not found: {file_path}")
         except Exception as e:
             logging.error(f"An error occurred: {e}")
         return
     
-    weak_passwords = {}
-
-    while True:
-        print("\nChoose an option:")
-        print("1. Check a single password")
-        print("2. Enter the path to a CSV file")
-        print("3. Decrypt saved passwords")
-        print("4. Exit")
-        choice = input("Enter your choice (1, 2, 3, or 4): ")
-
-        if choice == "1":
-            password = get_password_input(args.mask)
-            weaknesses, score = check_password_weaknesses(password, common_passwords)
-            
-            color = Fore.RED if score == "Low Grade of security" else Fore.YELLOW if score == "Medium Grade of security" else Fore.GREEN
-            print(f"{color}Password Score: {score}{Style.RESET_ALL}")
-            
-            if weaknesses:
-                for weakness in weaknesses:
-                    print(f"{Fore.RED}  - {weakness}{Style.RESET_ALL}")
-                print(f"Suggested Strong Password: {generate_secure_password()}")
-            else:
-                print(f"{Fore.GREEN}Password Score: {score}{Style.RESET_ALL}")
-        elif choice == "2":
-            file_path = input("Enter the path to the CSV file containing passwords: ")
-            try:
-                with open(file_path, "r", encoding="utf-8") as file:
-                    reader = csv.reader(file)
-                    total = sum(1 for row in reader)
-                    file.seek(0)
-                    reader = csv.reader(file)
-                    current = 0
-                    for row in reader:
-                        current +=1
-                        if not row or not row[0].strip():
-                            continue
-                        print(f"Checking Password {current} of {total}...", end="\r", flush=True)
-                        password = row[0]
-                        weaknesses, score = check_password_weaknesses(
-                            password, common_passwords
-                        )
-                        
-
-                        if weaknesses:
-                            weak_passwords[password] = generate_secure_password()
-                    print()
-
-                if weak_passwords:
-                    save_suggested_passwords(weak_passwords, file_path)
-                    print(
-                        f"Summarizing {len(weak_passwords)} weak passwords and their suggested strong passwords in 'suggested_passwords.txt'."
-                    )
-                else:
-                    print("No weak passwords found in the CSV file.")
-            except FileNotFoundError:
-                logging.error(f"File not found: {file_path}")
-            except Exception as e:
-                logging.error(f"An error occurred: {e}")
-        elif choice == "3":
-            print("\nDecrypt options:")
-            print("1. Use key from file (encryption.key)")
-            print("2. Enter key manually")
-            decrypt_choice = input("Enter your choice (1 or 2): ")
-            
-            if decrypt_choice == "1":
-                encrypted_file = input("Enter path to encrypted file: ")
-                result = load_encrypted_passwords(encrypted_file)
-                if result:
-                    print(f"\n{result}")
-            elif decrypt_choice == "2":
-                key_input = input("Enter your encryption key: ").strip()
-                if len(key_input) < 32:
-                    print(f"{Fore.RED}Invalid key format. Key should be 44 characters (base64-encoded){Style.RESET_ALL}")
-                    continue
-                encrypted_file = input("Enter path to encrypted file: ")
-                try:
-                    fernet = Fernet(key_input.encode())
-                    with open(encrypted_file, "rb") as f:
-                        encrypted_content = f.read()
-                    decrypted = fernet.decrypt(encrypted_content)
-                    print(f"\n{decrypted.decode()}")
-                except Exception as e:
-                    print(f"{Fore.RED}Failed to decrypt: Invalid key or file{Style.RESET_ALL}")
-            else:
-                print("Invalid choice.")
-        elif choice == "4":
-            print("Exiting the program.")
-            break
-        else:
-            print("Invalid choice. Please enter 1, 2, 3, or 4.")
+    tui_menu(common_passwords, args.no_tui)
 
 
 if __name__ == "__main__":
