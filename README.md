@@ -24,9 +24,11 @@ The script checks your password against several security criteria:
 - **Decryption:** You can decrypt and view previously saved passwords.
 - **TUI (Terminal User Interface):** Rich interactive interface with progress bars, tables, and colored output.
 - **CLI Support:** Use command-line arguments for automation.
-- **Cross-Platform:** Works on Windows, Linux, and macOS.
+- **Cross-Platform:** Works on Windows, Linux, and macOS with automatic Documents folder detection.
 - **Clear Feedback and Suggestions:** Provide clear feedback on the weaknesses of your password and offer secure suggestions for improvement.
 - **Interactive Prompts:** Use an interactive menu to navigate through options and easily check passwords.
+- **Rate Limiting:** Built-in protection against brute-force attacks (max 20 checks per minute).
+- **Safe File Handling:** Confirmation prompts before overwriting existing files.
 
 ## Menu (Interactive Mode)
 
@@ -120,6 +122,16 @@ python password_checker.py -f path/to/passwords.csv
 
 ## Output
 
-- Weak passwords and their suggested strong alternatives are saved to `~/Documents/suggested_passwords.txt`
+- Weak passwords and their suggested strong alternatives are saved to the user's Documents folder:
+  - **Windows:** `C:\Users\<username>\Documents\suggested_passwords.txt`
+  - **macOS/Linux:** `~/Documents/suggested_passwords.txt`
 - The file is encrypted with Fernet encryption
 - An encryption key is provided after saving - keep it safe to decrypt the file later
+- The encryption key is stored in the same directory as the script (`encryption.key`)
+
+## Security Features
+
+- **Rate Limiting:** Maximum 20 password checks per minute to prevent brute-force attacks
+- **Secure Key Storage:** Encryption keys are stored alongside the script
+- **Input Validation:** All inputs are validated before processing
+- **Safe Overwrites:** Confirmation required before overwriting existing files

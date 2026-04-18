@@ -11,7 +11,45 @@ import argparse
 import sys
 from colorama import Fore, Style, init
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
+
+RATE_LIMIT_SECONDS = 5
+MAX_CHECKS_PER_MINUTE = 20
+
+rate_limiter = {"last_check": 0, "checks_today": 0, "reset_time": 0}
+
+
+def get_crossplatform_documents_path():
+    """Returns the correct Documents folder path for the current OS."""
+    if os.name == "nt":
+        return os.path.join(os.environ.get("USERPROFILE", ""), "Documents")
+    elif os.name == "posix":
+        if os.uname().sysname == "Darwin":
+            return os.path.join(os.path.expanduser("~"), "Documents")
+        else:
+            return os.path.expanduser("~/Documents")
+    else:
+        return os.path.expanduser("~/Documents")
+
+
+def check_rate_limit():
+    """Check if the user has exceeded the rate limit for password checks."""
+    current_time = time.time()
+    if current_time - rate_limiter["reset_time"] > 60:
+        rate_limiter["checks_today"] = 0
+        rate_limiter["reset_time"] = current_time
+    
+    if rate_limiter["checks_today"] >= MAX_CHECKS_PER_MINUTE:
+        wait_time = 60 - (current_time - rate_limiter["reset_time"])
+        return False, wait_time
+    
+    if current_time - rate_limiter["last_check"] < RATE_LIMIT_SECONDS:
+        wait_time = RATE_LIMIT_SECONDS - (current_time - rate_limiter["last_check"])
+        return False, wait_time
+    
+    rate_limiter["last_check"] = current_time
+    rate_limiter["checks_today"] += 1
+    return True, 0
 
 try:
     from rich.console import Console
@@ -25,6 +63,18 @@ except ImportError:
     RICH_AVAILABLE = False
 
 console = Console()
+
+
+def confirm_action(message, default=False, use_rich=True):
+    """Ask user for confirmation with cross-platform support."""
+    if use_rich and RICH_AVAILABLE:
+        return Confirm.ask(message, default=default)
+    else:
+        suffix = " [Y/n]: " if default else " [y/N]: "
+        response = input(message + suffix).strip().lower()
+        if not response:
+            return default
+        return response in ["y", "yes"]
 
 
 def parse_args():
@@ -189,25 +239,41 @@ def get_common_passwords():
     return set()
 
 
-def save_suggested_passwords(weak_passwords, file_path):
+def save_suggested_passwords(weak_passwords, file_path, use_rich=True, confirm_overwrite=True):
     if not weak_passwords:
-        return
+        return None, None
     
     key = None
     
-    if os.path.exists("encryption.key"):
-        with open("encryption.key", "rb") as f:
+    key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "encryption.key")
+    if os.path.exists(key_path):
+        with open(key_path, "rb") as f:
             key = f.read()
         
     if key is None:
         key = Fernet.generate_key()
-        with open("encryption.key", "wb") as f:
+        with open(key_path, "wb") as f:
             f.write(key)
 
     fernet = Fernet(key)
 
     file_name = "suggested_passwords.txt"
-    full_path = os.path.join(os.path.expanduser("~/Documents"), file_name)
+    documents_path = get_crossplatform_documents_path()
+    
+    if not os.path.exists(documents_path):
+        os.makedirs(documents_path, exist_ok=True)
+    
+    full_path = os.path.join(documents_path, file_name)
+    
+    if confirm_overwrite and os.path.exists(full_path):
+        overwrite = confirm_action(
+            f"File {full_path} already exists. Overwrite?",
+            default=False,
+            use_rich=use_rich
+        )
+        if not overwrite:
+            return None, None
+    
     content = ""
     for weak, strong in weak_passwords.items():
         content += f"Weak Password: {weak}, Suggested Strong Password: {strong}\n"
@@ -221,11 +287,12 @@ def save_suggested_passwords(weak_passwords, file_path):
 
 
 def load_encrypted_passwords(file_path):
-    if not os.path.exists("encryption.key"):
+    key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "encryption.key")
+    if not os.path.exists(key_path):
         print("No encryption key found.")
         return None
     
-    with open("encryption.key", "rb") as f:
+    with open(key_path, "rb") as f:
         key = f.read()
     
     fernet = Fernet(key)
@@ -324,6 +391,17 @@ def tui_menu(common_passwords, no_tui=False):
             choice = input("Enter your choice (1, 2, 3, or 4): ")
 
         if choice == "1":
+            allowed, wait_time = check_rate_limit()
+            if not allowed:
+                if use_rich:
+                    console.print(f"[bold red]Rate limit exceeded. Please wait {wait_time:.1f} seconds.[/bold red]")
+                else:
+                    print(f"Rate limit exceeded. Please wait {wait_time:.1f} seconds.")
+                time.sleep(wait_time)
+                allowed, _ = check_rate_limit()
+                if not allowed:
+                    continue
+            
             if use_rich:
                 password = Prompt.ask("[bold]Enter password to check[/bold]", password=True)
             else:
@@ -389,8 +467,9 @@ def tui_menu(common_passwords, no_tui=False):
                         print()
                 
                 if weak_passwords:
-                    full_path, key = save_suggested_passwords(weak_passwords, file_path)
-                    display_batch_results(weak_passwords, full_path, key, use_rich)
+                    full_path, key = save_suggested_passwords(weak_passwords, file_path, use_rich=use_rich)
+                    if full_path:
+                        display_batch_results(weak_passwords, full_path, key, use_rich)
                 else:
                     if use_rich:
                         console.print("[green]No weak passwords found in the CSV file.[/green]")
@@ -494,6 +573,11 @@ def main():
     common_passwords = get_common_passwords()
     
     if args.check:
+        allowed, wait_time = check_rate_limit()
+        if not allowed:
+            print(f"Rate limit exceeded. Please wait {wait_time:.1f} seconds.")
+            return
+        
         password = args.check
         weaknesses, score = check_password_weaknesses(password, common_passwords)
         display_password_result(password, weaknesses, score, use_rich)
@@ -546,8 +630,9 @@ def main():
                         print()
             
             if weak_passwords:
-                full_path, key = save_suggested_passwords(weak_passwords, file_path)
-                display_batch_results(weak_passwords, full_path, key, use_rich)
+                full_path, key = save_suggested_passwords(weak_passwords, file_path, use_rich=use_rich)
+                if full_path:
+                    display_batch_results(weak_passwords, full_path, key, use_rich)
             else:
                 if not args.quiet:
                     if use_rich:
